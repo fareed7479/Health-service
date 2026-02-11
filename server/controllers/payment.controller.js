@@ -3,10 +3,15 @@ import crypto from 'crypto';
 import { Payment } from '../models/Payment.model.js';
 import { Booking } from '../models/Booking.model.js';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
-});
+const isRazorpayEnabled = process.env.RAZORPAY_ENABLED === 'true';
+
+let razorpay;
+if (isRazorpayEnabled) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET
+  });
+}
 
 // Create Razorpay Order
 export const createOrder = async (req, res, next) => {
@@ -40,8 +45,10 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
+    const amountInPaise = booking.amount.finalAmount * 100; // Convert to paise
+
     const options = {
-      amount: booking.amount.finalAmount * 100, // Convert to paise
+      amount: amountInPaise,
       currency: 'INR',
       receipt: `booking_${bookingId}_${Date.now()}`,
       notes: {
@@ -50,7 +57,19 @@ export const createOrder = async (req, res, next) => {
       }
     };
 
-    const order = await razorpay.orders.create(options);
+    let order;
+
+    if (isRazorpayEnabled && razorpay) {
+      // Real Razorpay order creation (production / enabled mode)
+      order = await razorpay.orders.create(options);
+    } else {
+      // Mock order for development when Razorpay is disabled
+      order = {
+        id: `order_dummy_${bookingId}_${Date.now()}`,
+        amount: amountInPaise,
+        currency: 'INR'
+      };
+    }
 
     // Create payment record
     let payment = await Payment.findOne({ booking: bookingId });
@@ -69,14 +88,20 @@ export const createOrder = async (req, res, next) => {
       await payment.save();
     }
 
+    const responseOrder = {
+      id: order.id,
+      amount: order.amount,
+      currency: order.currency
+    };
+
+    // Preserve existing response shape for real Razorpay flow
+    if (isRazorpayEnabled) {
+      responseOrder.key = process.env.RAZORPAY_KEY_ID;
+    }
+
     res.status(200).json({
       success: true,
-      order: {
-        id: order.id,
-        amount: order.amount,
-        currency: order.currency,
-        key: process.env.RAZORPAY_KEY_ID
-      },
+      order: responseOrder,
       paymentId: payment._id
     });
   } catch (error) {
@@ -95,6 +120,28 @@ export const verifyPayment = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Payment not found'
+      });
+    }
+
+    // In development/mock mode, skip Razorpay signature verification
+    if (!isRazorpayEnabled) {
+      // Mark payment as completed (equivalent to "paid" within existing enum)
+      payment.razorpayPaymentId = razorpay_payment_id || payment.razorpayPaymentId;
+      payment.razorpaySignature = razorpay_signature || payment.razorpaySignature;
+      payment.status = 'completed';
+      await payment.save();
+
+      // Update booking status to accepted (current "confirmed" state in the app)
+      const booking = await Booking.findById(payment.booking);
+      if (booking && booking.status === 'pending') {
+        booking.status = 'accepted';
+        await booking.save();
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payment verified successfully (mock mode)',
+        payment
       });
     }
 
