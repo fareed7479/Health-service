@@ -89,6 +89,10 @@ const authSlice = createSlice({
         state.loading = false
         state.error = action.payload
       })
+      .addCase(getMe.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
       .addCase(register.pending, (state) => {
         state.loading = true
         state.error = null
@@ -104,10 +108,20 @@ const authSlice = createSlice({
         state.user = action.payload.user
         state.token = action.payload.token
         state.isAuthenticated = true
+        state.loading = false
       })
       .addCase(getMe.fulfilled, (state, action) => {
         state.user = action.payload
         state.isAuthenticated = true
+        state.loading = false
+      })
+      .addCase(getMe.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload
+        state.user = null
+        state.token = null
+        state.isAuthenticated = false
+        localStorage.removeItem('token')
       })
   },
 })

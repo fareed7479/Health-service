@@ -31,13 +31,13 @@ import AdminReports from './pages/admin/Reports'
 
 function App() {
   const dispatch = useDispatch()
-  const { token, isAuthenticated } = useSelector((state) => state.auth)
+  const { token } = useSelector((state) => state.auth)
 
   useEffect(() => {
-    if (token && !isAuthenticated) {
+    if (token) {
       dispatch(getMe())
     }
-  }, [token, dispatch, isAuthenticated])
+  }, [token, dispatch])
 
   return (
     <Routes>
