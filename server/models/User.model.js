@@ -57,9 +57,16 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Hash password before saving
+// Hash password before saving (guard against double hashing)
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
+  
+  // Prevent double hashing: if password already looks like a bcrypt hash, skip
+  if (this.password && this.password.startsWith('$2')) {
+    console.warn('⚠️ Warning: Password already hashed, skipping hash middleware');
+    return next();
+  }
+  
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });

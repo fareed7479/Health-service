@@ -13,10 +13,10 @@ const __dirname = dirname(__filename);
 
 // Default admin details
 const DEFAULT_ADMIN = {
-  name: 'Super Admin',
-  email: 'admin@healthcare.com',
+  name: 'Super-Admin',
+  email: 'admin@gmail.com',
   phone: '9999999999',
-  password: 'Admin@123',
+  password: 'admin123',
   role: 'admin',
   isVerified: true,
   isBlocked: false
@@ -30,7 +30,7 @@ const getAdminDetails = () => {
   // Parse command line arguments
   args.forEach((arg) => {
     if (arg.startsWith('--email=')) {
-      adminDetails.email = arg.split('=')[1];
+      adminDetails.email = arg.split('=')[1].toLowerCase();
     } else if (arg.startsWith('--name=')) {
       adminDetails.name = arg.split('=')[1];
     } else if (arg.startsWith('--phone=')) {
@@ -39,6 +39,9 @@ const getAdminDetails = () => {
       adminDetails.password = arg.split('=')[1];
     }
   });
+
+  // Ensure default email is also lowercase
+  adminDetails.email = adminDetails.email.toLowerCase();
 
   return adminDetails;
 };
@@ -60,28 +63,29 @@ const createOrUpdateAdmin = async () => {
 
     // Get admin details
     const adminDetails = getAdminDetails();
+    
+    // Normalize email to lowercase for consistency
+    const normalizedEmail = adminDetails.email.toLowerCase();
 
     // Check if admin already exists by email
-    const existingAdmin = await User.findOne({ email: adminDetails.email });
+    const existingAdmin = await User.findOne({ email: normalizedEmail });
 
     if (existingAdmin) {
-      console.log(`\n⚠️  Admin with email "${adminDetails.email}" already exists.`);
+      console.log(`\n⚠️  Admin with email "${normalizedEmail}" already exists.`);
       console.log('Updating existing admin...');
-
-      // Hash password if provided
-      if (adminDetails.password) {
-        adminDetails.password = await bcrypt.hash(adminDetails.password, 10);
-      }
 
       // Update existing admin
       existingAdmin.name = adminDetails.name;
       existingAdmin.phone = adminDetails.phone;
+      existingAdmin.email = normalizedEmail;
       existingAdmin.role = 'admin';
       existingAdmin.isVerified = true;
       existingAdmin.isBlocked = false;
       
+      // Let the pre-save middleware handle password hashing (do NOT pre-hash)
       if (adminDetails.password) {
         existingAdmin.password = adminDetails.password;
+        console.log('📝 Password set (will be hashed by middleware)');
       }
 
       await existingAdmin.save();
@@ -104,19 +108,17 @@ const createOrUpdateAdmin = async () => {
         process.exit(1);
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(adminDetails.password, 10);
-
-      // Create new admin
+      // Create new admin (do NOT pre-hash password, let the pre-save middleware handle it)
       const admin = await User.create({
         name: adminDetails.name,
-        email: adminDetails.email,
+        email: normalizedEmail,
         phone: adminDetails.phone,
-        password: hashedPassword,
+        password: adminDetails.password,
         role: 'admin',
         isVerified: true,
         isBlocked: false
       });
+      console.log('📝 Password set (hashed by middleware)');
 
       console.log('\n✅ Admin created successfully!');
       console.log('📋 Admin Details:');

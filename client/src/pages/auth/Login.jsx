@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate, Link } from 'react-router-dom'
-import { login } from '../../store/slices/authSlice'
+// import { login } from '../../store/slices/authSlice'
 import toast from 'react-hot-toast'
 import Layout from '../../components/Layout'
+import { login, getMe } from '../../store/slices/authSlice'
+
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -18,8 +20,11 @@ const Login = () => {
     e.preventDefault()
     try {
       const result = await dispatch(login(formData)).unwrap()
+
+      // Load fresh user from backend
+      const user = await dispatch(getMe()).unwrap()
+
       toast.success('Login successful!')
-      const user = result.user
       if (user.role === 'customer') {
         navigate('/customer/dashboard')
       } else if (user.role === 'provider') {
